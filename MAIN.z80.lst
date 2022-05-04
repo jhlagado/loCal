@@ -518,7 +518,7 @@
 00C6                             ; 
 00C6                             ;       LoCal low-calorie interpreter for the Z80
 00C6                             ; 
-00C6                             ;       Ken Boak, John Hardy and Craig Jones.
+00C6                             ;       Contains code written by Ken Boak, John Hardy and Craig Jones.
 00C6                             ; 
 00C6                             ;       GNU GENERAL PUBLIC LICENSE                   Version 3, 29 June 2007
 00C6                             ; 
@@ -573,10 +573,10 @@
 0190                IOPCODES:      
 0190                          ;*Macro unroll:  LITDAT 4		; macros for compression
 0190   04                     DB   4   ; macros for compression
-0191   06                     DB   lsb(exit_)   ;   NUL get least signif byte of address exit_
+0191   09                     DB   lsb(exit_)   ;   NUL get least signif byte of address exit_
 0192   00                     DB   lsb(nop_)   ;   SOH
 0193   00                     DB   lsb(nop_)   ;   STX
-0194   03                     DB   lsb(etx_)   ;   ETX
+0194   06                     DB   lsb(etx_)   ;   ETX
 0195                          ;*Macro unroll:  REPDAT 29, lsb(nop_)
 0195   9D                     DB   (29 | $80)   
 0196   00                     DB   lsb(nop_)   
@@ -595,11 +595,11 @@
 01A2   00                     DB   lsb(nop_)   ;    +
 01A3   00                     DB   lsb(nop_)   ;    ,
 01A4   00                     DB   lsb(nop_)   ;    -
-01A5   00                     DB   lsb(nop_)   ;    .
+01A5   13                     DB   lsb(dot_)   ;    .
 01A6   00                     DB   lsb(nop_)   ;    /	;/MOD
-01A7                          ;*Macro unroll:  REPDAT 10, lsb(nop_)	; 10 x repeat lsb of add to the num routine
-01A7   8A                     DB   (10 | $80)   ; 10 x repeat lsb of add to the num routine
-01A8   00                     DB   lsb(nop_)   
+01A7                          ;*Macro unroll:  REPDAT 10, lsb(num_)	;   1 2 3 ... 9
+01A7   8A                     DB   (10 | $80)   ;   1 2 3 ... 9
+01A8   03                     DB   lsb(num_)   
 01A9                          ;*Macro unroll:  LITDAT 7
 01A9   07                     DB   7   
 01AA   00                     DB   lsb(nop_)   ;    :
@@ -665,9 +665,9 @@
 01E2   31 00 12               LD   SP,DSTACK   ; start of LoCal
 01E5   CD 89 02               CALL   init   ; setups
 01E8   CD E3 02               CALL   printStr   ; prog count to stack, put code line 235 on stack then call print
-01EB   4C 6F 43 61 6C 20 56 31 2E 31 0D 0A 00 .CSTR   "LoCal V1.1\r\n"   
+01EB   4C 6F 43 61 6C 20 56 30 2E 31 0D 0A 00 .CSTR   "LoCal V0.1\r\n"   
 01F8                INTERPRET:      
-01F8   CD 52 04               CALL   prompt   
+01F8   CD 5D 04               CALL   prompt   
 01FB   01 00 00               LD   BC,0   ; load BC with offset into TIB, decide char into tib or execute or control
 01FE   ED 43 84 14            LD   (vTIBPtr),BC   
 0202                INTERPRET2:      ; calc nesting (a macro might have changed it)
@@ -828,7 +828,7 @@
 02D1   18 E5                  JR   initOps1   
 02D3                ENTER:       ;=9
 02D3   60 69                  LD   HL,BC   
-02D5   CD 64 04               CALL   rpush   ; save Instruction Pointer
+02D5   CD 6F 04               CALL   rpush   ; save Instruction Pointer
 02D8   C1                     POP   BC   
 02D9   0B                     DEC   BC   
 02DA   FD E9                  JP   (IY)   
@@ -838,7 +838,7 @@
 02E2   C9                     RET      
 02E3                PRINTSTR:      ;=14
 02E3   E3                     EX   (SP),HL   ; swap			
-02E4   CD 5F 04               CALL   putStr   
+02E4   CD 6A 04               CALL   putStr   
 02E7   23                     INC   HL   ; inc past null
 02E8   E3                     EX   (SP),HL   ; put it back	
 02E9   C9                     RET      
@@ -956,104 +956,111 @@
 0400                PAGE4:       
 0400                NOP_:        
 0400   C3 6D 02               JP   NEXT   ; hardwire white space to always go to NEXT (important for arrays)
-0403                ETX_:        
-0403   C3 D7 01               JP   ETX   
-0406                EXIT_:       
-0406   03                     INC   BC   ; store offests into a table of bytes, smaller
-0407   50 59                  LD   DE,BC   
-0409   CD 6F 04               CALL   rpop   ; Restore Instruction pointer
-040C   44 4D                  LD   BC,HL   
-040E   EB                     EX   DE,HL   
-040F   E9                     JP   (HL)   
-0410   C3 13 04     NUM_:     JP   num   
-0413                             ; ********************************************************************************
-0413                             ; Number Handling Routine - converts numeric ascii string to a 16-bit number in HL
-0413                             ; Read the first character.
-0413                             ;			
-0413                             ; Number characters ($30 to $39) are converted to digits by subtracting $30
-0413                             ; and then added into the L register. (HL forms a 16-bit accumulator)
-0413                             ; Fetch the next character, if it is a number, multiply contents of HL by 10
-0413                             ; and then add in the next digit. Repeat this until a non-number character is
-0413                             ; detected. Add in the final digit so that HL contains the converted number.
-0413                             ; Push HL onto the stack and proceed to the dispatch routine.
-0413                             ; ********************************************************************************
-0413                NUM:         ;=23
-0413   21 00 00               LD   HL,$0000   ;     Clear HL to accept the number
-0416   0A                     LD   A,(BC)   ;     Get the character which is a numeral
-0417                NUM1:        ; corrected KB 24/11/21
-0417   D6 30                  SUB   $30   ;       Form decimal digit
-0419   85                     ADD   A,L   ;       Add into bottom of HL
-041A   6F                     LD   L,A   ; 
-041B   3E 00                  LD   A,00   ;       Clear A
-041D   8C                     ADC   A,H   ; Add with carry H-reg
-041E   67                     LD   H,A   ; Put result in H-reg
-041F   03                     INC   BC   ;       Increment IP
-0420   0A                     LD   A,(BC)   ;       and get the next character
-0421   FE 30                  CP   $30   ;       Less than $30
-0423   38 0C                  JR   C,num2   ;       Not a number / end of number
-0425   FE 3A                  CP   $3A   ;       Greater or equal to $3A
-0427   30 08                  JR   NC,num2   ;       Not a number / end of number
-0429                             ; Multiply digit(s) in HL by 10
-0429   29                     ADD   HL,HL   ;        2X
-042A   5D                     LD   E,L   ;        LD DE,HL
-042B   54                     LD   D,H   ; 
-042C   29                     ADD   HL,HL   ;        4X
-042D   29                     ADD   HL,HL   ;        8X
-042E   19                     ADD   HL,DE   ;        2X  + 8X  = 10X
-042F                             ; 52t cycles
-042F   18 E6                  JR   num1   
-0431                NUM2:        
-0431   0B                     DEC   BC   
-0432   E5                     PUSH   HL   ; Put the number on the stack
-0433   FD E9                  JP   (IY)   ; and process the next character
-0435                HEX:         ;=26
-0435   21 00 00               LD   HL,0   ; Clear HL to accept the number
-0438                HEX1:        
-0438   03                     INC   BC   
-0439   0A                     LD   A,(BC)   ; Get the character which is a numeral
-043A   CB 77                  BIT   6,A   ; is it uppercase alpha?
-043C   28 02                  JR   Z,hex2   ; no a decimal
-043E   D6 07                  SUB   7   ; sub 7  to make $A - $F
-0440                HEX2:        
-0440   D6 30                  SUB   $30   ; Form decimal digit
-0442   DA 31 04               JP   C,num2   
-0445   FE 10                  CP   $0F+1   
-0447   D2 31 04               JP   NC,num2   
-044A   29                     ADD   HL,HL   ; 2X ; Multiply digit(s) in HL by 16
-044B   29                     ADD   HL,HL   ; 4X
-044C   29                     ADD   HL,HL   ; 8X
-044D   29                     ADD   HL,HL   ; 16X
-044E   85                     ADD   A,L   ; Add into bottom of HL
-044F   6F                     LD   L,A   ; 
-0450   18 E6                  JR   hex1   
-0452                             ;*******************************************************************
-0452                             ; Subroutines
-0452                             ;*******************************************************************
-0452                PROMPT:      ;=9
-0452   CD E3 02               CALL   printStr   
-0455   0D 0A 3E 20 00         .CSTR   "\r\n> "   
-045A   C9                     RET      
-045B                PUTSTR0:      
-045B   CD 85 00               CALL   putchar   
-045E   23                     INC   HL   
-045F                PUTSTR:      
-045F   7E                     LD   A,(HL)   
-0460   B7                     OR   A   
-0461   20 F8                  JR   NZ,putStr0   
-0463   C9                     RET      
-0464                RPUSH:       ;=11
-0464   DD 2B                  DEC   IX   
-0466   DD 74 00               LD   (IX+0),H   
-0469   DD 2B                  DEC   IX   
-046B   DD 75 00               LD   (IX+0),L   
+0403   C3 1E 04     NUM_:     JP   num   
+0406                ETX_:        
+0406   C3 D7 01               JP   ETX   
+0409                EXIT_:       
+0409   03                     INC   BC   ; store offests into a table of bytes, smaller
+040A   50 59                  LD   DE,BC   
+040C   CD 7A 04               CALL   rpop   ; Restore Instruction pointer
+040F   44 4D                  LD   BC,HL   
+0411   EB                     EX   DE,HL   
+0412   E9                     JP   (HL)   
+0413                DOT_:        
+0413   E1                     POP   HL   
+0414   CD 08 03               CALL   printdec   
+0417                DOT2:        
+0417   3E 20                  LD   A," "   
+0419   CD 85 00               CALL   putChar   
+041C   FD E9                  JP   (IY)   
+041E                             ; ********************************************************************************
+041E                             ; Number Handling Routine - converts numeric ascii string to a 16-bit number in HL
+041E                             ; Read the first character.
+041E                             ;			
+041E                             ; Number characters ($30 to $39) are converted to digits by subtracting $30
+041E                             ; and then added into the L register. (HL forms a 16-bit accumulator)
+041E                             ; Fetch the next character, if it is a number, multiply contents of HL by 10
+041E                             ; and then add in the next digit. Repeat this until a non-number character is
+041E                             ; detected. Add in the final digit so that HL contains the converted number.
+041E                             ; Push HL onto the stack and proceed to the dispatch routine.
+041E                             ; ********************************************************************************
+041E                NUM:         ;=23
+041E   21 00 00               LD   HL,$0000   ;     Clear HL to accept the number
+0421   0A                     LD   A,(BC)   ;     Get the character which is a numeral
+0422                NUM1:        ; corrected KB 24/11/21
+0422   D6 30                  SUB   $30   ;       Form decimal digit
+0424   85                     ADD   A,L   ;       Add into bottom of HL
+0425   6F                     LD   L,A   ; 
+0426   3E 00                  LD   A,00   ;       Clear A
+0428   8C                     ADC   A,H   ; Add with carry H-reg
+0429   67                     LD   H,A   ; Put result in H-reg
+042A   03                     INC   BC   ;       Increment IP
+042B   0A                     LD   A,(BC)   ;       and get the next character
+042C   FE 30                  CP   $30   ;       Less than $30
+042E   38 0C                  JR   C,num2   ;       Not a number / end of number
+0430   FE 3A                  CP   $3A   ;       Greater or equal to $3A
+0432   30 08                  JR   NC,num2   ;       Not a number / end of number
+0434                             ; Multiply digit(s) in HL by 10
+0434   29                     ADD   HL,HL   ;        2X
+0435   5D                     LD   E,L   ;        LD DE,HL
+0436   54                     LD   D,H   ; 
+0437   29                     ADD   HL,HL   ;        4X
+0438   29                     ADD   HL,HL   ;        8X
+0439   19                     ADD   HL,DE   ;        2X  + 8X  = 10X
+043A                             ; 52t cycles
+043A   18 E6                  JR   num1   
+043C                NUM2:        
+043C   0B                     DEC   BC   
+043D   E5                     PUSH   HL   ; Put the number on the stack
+043E   FD E9                  JP   (IY)   ; and process the next character
+0440                HEX:         ;=26
+0440   21 00 00               LD   HL,0   ; Clear HL to accept the number
+0443                HEX1:        
+0443   03                     INC   BC   
+0444   0A                     LD   A,(BC)   ; Get the character which is a numeral
+0445   CB 77                  BIT   6,A   ; is it uppercase alpha?
+0447   28 02                  JR   Z,hex2   ; no a decimal
+0449   D6 07                  SUB   7   ; sub 7  to make $A - $F
+044B                HEX2:        
+044B   D6 30                  SUB   $30   ; Form decimal digit
+044D   DA 3C 04               JP   C,num2   
+0450   FE 10                  CP   $0F+1   
+0452   D2 3C 04               JP   NC,num2   
+0455   29                     ADD   HL,HL   ; 2X ; Multiply digit(s) in HL by 16
+0456   29                     ADD   HL,HL   ; 4X
+0457   29                     ADD   HL,HL   ; 8X
+0458   29                     ADD   HL,HL   ; 16X
+0459   85                     ADD   A,L   ; Add into bottom of HL
+045A   6F                     LD   L,A   ; 
+045B   18 E6                  JR   hex1   
+045D                             ;*******************************************************************
+045D                             ; Subroutines
+045D                             ;*******************************************************************
+045D                PROMPT:      ;=9
+045D   CD E3 02               CALL   printStr   
+0460   0D 0A 3E 20 00         .CSTR   "\r\n> "   
+0465   C9                     RET      
+0466                PUTSTR0:      
+0466   CD 85 00               CALL   putchar   
+0469   23                     INC   HL   
+046A                PUTSTR:      
+046A   7E                     LD   A,(HL)   
+046B   B7                     OR   A   
+046C   20 F8                  JR   NZ,putStr0   
 046E   C9                     RET      
-046F                RPOP:        ;=11
-046F   DD 6E 00               LD   L,(IX+0)   
-0472   DD 23                  INC   IX   
-0474   DD 66 00               LD   H,(IX+0)   
-0477   DD 23                  INC   IX   
-0479                RPOP2:       
+046F                RPUSH:       ;=11
+046F   DD 2B                  DEC   IX   
+0471   DD 74 00               LD   (IX+0),H   
+0474   DD 2B                  DEC   IX   
+0476   DD 75 00               LD   (IX+0),L   
 0479   C9                     RET      
+047A                RPOP:        ;=11
+047A   DD 6E 00               LD   L,(IX+0)   
+047D   DD 23                  INC   IX   
+047F   DD 66 00               LD   H,(IX+0)   
+0482   DD 23                  INC   IX   
+0484                RPOP2:       
+0484   C9                     RET      
 1000                          .ORG   RAMSTART   
 1000                TIB:      DS   TIBSIZE   
 1100                          DS   RSIZE   
@@ -1215,7 +1222,8 @@ PUTCHAR:            0085 DEFINED AT LINE 438 IN IOSerial.asm
                     > USED AT LINE 215 IN local.asm
                     > USED AT LINE 392 IN local.asm
                     > USED AT LINE 417 IN local.asm
-                    > USED AT LINE 562 IN local.asm
+                    > USED AT LINE 489 IN local.asm
+                    > USED AT LINE 571 IN local.asm
 RESET:              008B DEFINED AT LINE 444 IN IOSerial.asm
                     > USED AT LINE 103 IN IOSerial.asm
 DSIZE:              0080 DEFINED AT LINE 13 IN local.asm
@@ -1239,7 +1247,7 @@ IALTVARS:           0180 DEFINED AT LINE 52 IN local.asm
 IOPCODES:           0190 DEFINED AT LINE 62 IN local.asm
                     > USED AT LINE 304 IN local.asm
 ETX:                01D7 DEFINED AT LINE 140 IN local.asm
-                    > USED AT LINE 472 IN local.asm
+                    > USED AT LINE 474 IN local.asm
 ETX1:               01E0 DEFINED AT LINE 145 IN local.asm
                     > USED AT LINE 143 IN local.asm
 START:              01E2 DEFINED AT LINE 148 IN local.asm
@@ -1288,7 +1296,7 @@ CRLF:               02DC DEFINED AT LINE 338 IN local.asm
 PRINTSTR:           02E3 DEFINED AT LINE 343 IN local.asm
                     > USED AT LINE 151 IN local.asm
                     > USED AT LINE 339 IN local.asm
-                    > USED AT LINE 557 IN local.asm
+                    > USED AT LINE 566 IN local.asm
 LOOKUPREF:          02EA DEFINED AT LINE 350 IN local.asm
 LOOKUPREF0:         02EC DEFINED AT LINE 352 IN local.asm
 LOOKUPREF1:         02F0 DEFINED AT LINE 355 IN local.asm
@@ -1297,6 +1305,7 @@ LOOKUPREF2:         02F6 DEFINED AT LINE 359 IN local.asm
 LOOKUPREF3:         02FA DEFINED AT LINE 362 IN local.asm
                     > USED AT LINE 358 IN local.asm
 PRINTDEC:           0308 DEFINED AT LINE 375 IN local.asm
+                    > USED AT LINE 486 IN local.asm
 PRINTDEC1:          0321 DEFINED AT LINE 385 IN local.asm
                     > USED AT LINE 377 IN local.asm
                     > USED AT LINE 379 IN local.asm
@@ -1327,34 +1336,36 @@ NESTING4:           0375 DEFINED AT LINE 458 IN local.asm
                     > USED AT LINE 455 IN local.asm
 PAGE4:              0400 DEFINED AT LINE 466 IN local.asm
 NOP_:               0400 DEFINED AT LINE 468 IN local.asm
-ETX_:               0403 DEFINED AT LINE 471 IN local.asm
-EXIT_:              0406 DEFINED AT LINE 474 IN local.asm
-NUM_:               0410 DEFINED AT LINE 482 IN local.asm
-NUM:                0413 DEFINED AT LINE 496 IN local.asm
-                    > USED AT LINE 482 IN local.asm
-NUM1:               0417 DEFINED AT LINE 500 IN local.asm
-                    > USED AT LINE 524 IN local.asm
-NUM2:               0431 DEFINED AT LINE 526 IN local.asm
-                    > USED AT LINE 512 IN local.asm
-                    > USED AT LINE 514 IN local.asm
-                    > USED AT LINE 541 IN local.asm
-                    > USED AT LINE 543 IN local.asm
-HEX:                0435 DEFINED AT LINE 531 IN local.asm
-HEX1:               0438 DEFINED AT LINE 533 IN local.asm
+NUM_:               0403 DEFINED AT LINE 471 IN local.asm
+ETX_:               0406 DEFINED AT LINE 473 IN local.asm
+EXIT_:              0409 DEFINED AT LINE 476 IN local.asm
+DOT_:               0413 DEFINED AT LINE 484 IN local.asm
+DOT2:               0417 DEFINED AT LINE 487 IN local.asm
+NUM:                041E DEFINED AT LINE 505 IN local.asm
+                    > USED AT LINE 471 IN local.asm
+NUM1:               0422 DEFINED AT LINE 509 IN local.asm
+                    > USED AT LINE 533 IN local.asm
+NUM2:               043C DEFINED AT LINE 535 IN local.asm
+                    > USED AT LINE 521 IN local.asm
+                    > USED AT LINE 523 IN local.asm
                     > USED AT LINE 550 IN local.asm
-HEX2:               0440 DEFINED AT LINE 539 IN local.asm
-                    > USED AT LINE 537 IN local.asm
-PROMPT:             0452 DEFINED AT LINE 556 IN local.asm
+                    > USED AT LINE 552 IN local.asm
+HEX:                0440 DEFINED AT LINE 540 IN local.asm
+HEX1:               0443 DEFINED AT LINE 542 IN local.asm
+                    > USED AT LINE 559 IN local.asm
+HEX2:               044B DEFINED AT LINE 548 IN local.asm
+                    > USED AT LINE 546 IN local.asm
+PROMPT:             045D DEFINED AT LINE 565 IN local.asm
                     > USED AT LINE 155 IN local.asm
-PUTSTR0:            045B DEFINED AT LINE 561 IN local.asm
-                    > USED AT LINE 567 IN local.asm
-PUTSTR:             045F DEFINED AT LINE 564 IN local.asm
+PUTSTR0:            0466 DEFINED AT LINE 570 IN local.asm
+                    > USED AT LINE 576 IN local.asm
+PUTSTR:             046A DEFINED AT LINE 573 IN local.asm
                     > USED AT LINE 345 IN local.asm
-RPUSH:              0464 DEFINED AT LINE 570 IN local.asm
+RPUSH:              046F DEFINED AT LINE 579 IN local.asm
                     > USED AT LINE 333 IN local.asm
-RPOP:               046F DEFINED AT LINE 577 IN local.asm
-                    > USED AT LINE 477 IN local.asm
-RPOP2:              0479 DEFINED AT LINE 582 IN local.asm
+RPOP:               047A DEFINED AT LINE 586 IN local.asm
+                    > USED AT LINE 479 IN local.asm
+RPOP2:              0484 DEFINED AT LINE 591 IN local.asm
 TIB:                1000 DEFINED AT LINE 3 IN ram.asm
                     > USED AT LINE 164 IN local.asm
                     > USED AT LINE 211 IN local.asm

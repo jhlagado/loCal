@@ -2,7 +2,7 @@
 ;
 ;       LoCal low-calorie interpreter for the Z80 
 ;
-;       Ken Boak, John Hardy and Craig Jones. 
+;       Contains code written by Ken Boak, John Hardy and Craig Jones. 
 ;
 ;       GNU GENERAL PUBLIC LICENSE                   Version 3, 29 June 2007
 ;
@@ -82,10 +82,10 @@ iOpcodes:
         DB    lsb(nop_)         ;    +
         DB    lsb(nop_)         ;    ,            
         DB    lsb(nop_)         ;    -
-        DB    lsb(nop_)         ;    .
+        DB    lsb(dot_)         ;    .
         DB    lsb(nop_)         ;    /	;/MOD
 
-        REPDAT 10, lsb(nop_)	; 10 x repeat lsb of add to the num routine 
+        REPDAT 10, lsb(num_)	;   1 2 3 ... 9 
 
         LITDAT 7
         DB    lsb(nop_)         ;    :        
@@ -149,7 +149,7 @@ start:
         LD SP,DSTACK		    ; start of LoCal
         CALL init		        ; setups
         CALL printStr		    ; prog count to stack, put code line 235 on stack then call print
-        .cstr "LoCal V1.1\r\n"
+        .cstr "LoCal V0.1\r\n"
 
 interpret:
         call prompt
@@ -468,6 +468,8 @@ page4:
 nop_:       
         JP NEXT             ; hardwire white space to always go to NEXT (important for arrays)
 
+num_:   JP num
+
 etx_:
         JP ETX
         
@@ -479,7 +481,14 @@ exit_:
         EX DE,HL
         JP (HL)
 
-num_:   JP  num
+dot_:       
+        POP HL
+        CALL printdec
+dot2:
+        LD A,' '           
+        CALL putChar
+        JP (IY)
+
 
 ; ********************************************************************************
 ; Number Handling Routine - converts numeric ascii string to a 16-bit number in HL
