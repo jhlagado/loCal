@@ -184,7 +184,7 @@ interpret4:
 waitchar:   
         CALL getchar            ; loop around waiting for character from serial port
         CP $20			        ; compare to space
-        JR NC,waitchar1		    ; if >= space, if below 20 set cary flag
+        JR NC,waitchar1		    ; if >= space, if below 20 set carry flag
         CP $0                   ; is it end of string? null end of string
         JR Z,waitchar4
         CP '\r'                 ; carriage return? ascii 13
@@ -489,19 +489,6 @@ dot2:
         CALL putChar
         JP (IY)
 
-
-; ********************************************************************************
-; Number Handling Routine - converts numeric ascii string to a 16-bit number in HL
-; Read the first character. 
-;			
-; Number characters ($30 to $39) are converted to digits by subtracting $30
-; and then added into the L register. (HL forms a 16-bit accumulator)
-; Fetch the next character, if it is a number, multiply contents of HL by 10
-; and then add in the next digit. Repeat this until a non-number character is 
-; detected. Add in the final digit so that HL contains the converted number.
-; Push HL onto the stack and proceed to the dispatch routine.
-; ********************************************************************************
-         
 num:                                ;=23
 		LD HL,$0000				    ;     Clear HL to accept the number
 		LD A,(BC)				    ;     Get the character which is a numeral
@@ -590,4 +577,15 @@ rpop:                               ;=11
         INC IX                  
 rpop2:
         RET
+
+nextchar:                           ; loads the next non-whitespace char except NUL or ETX, returns A = char | 0
+        LD A,(BC)
+        CP ' '+1
+        RET NC
+        OR A
+        RET Z
+        SUB 3
+        RET Z
+        INC BC
+        JR nextchar
 
